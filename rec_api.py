@@ -20,11 +20,18 @@ class rec_api(object):
             req.raise_for_status()
             return req.json()
         except requests.exceptions.HTTPError as hterror:
-            print(hterror)
+            logging.error(hterror)
         except ValueError as verror:
-            print(verror)
+            logging.error(verror)
 
     def search_campsites(self, name):
+        """
+        Search for campgrounds
+        Arguments:
+            name (str) - name of campground
+        Returns:
+            (list) - campground results
+        """
         endpoint = "search"
         params = {
             'q': name,
@@ -37,11 +44,20 @@ class rec_api(object):
         return self._get_json(endpoint, params).get("results")
 
     def get_site_availability(self, id, start_date):
+        """
+        Search for campgrounds
+        Arguments:
+            id (str) - entity_id of campground
+            start_date (datetime) - start date from which to search (months)
+        Returns:
+            (list) - monthly availability for each site in campground
+        """
         url = "camps/availability/campground/{}/month".format(id)
+        date_string = start_date.strftime("%Y-%m-%dT00:00:00.000Z")
         params = {
-            'start_date': start_date
+            'start_date': date_string
         }
-        return self._get_json(url, params).get("campsites")
+        return self._get_json(url, params).get("campsites").values()
 
 
 
