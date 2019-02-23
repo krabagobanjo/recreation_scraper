@@ -1,4 +1,7 @@
-import argparse, logging
+import argparse, logging, datetime, base64
+from rec_api import rec_client
+
+
 
 def make_arg_parser():
     parser = argparse.ArgumentParser(description="Watch for recreation.gov campsites")

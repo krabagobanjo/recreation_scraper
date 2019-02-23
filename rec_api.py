@@ -1,6 +1,6 @@
 import requests, logging, datetime
 
-class rec_api(object):
+class rec_client(object):
     
     def __init__(self):
         self.API_BASE = "https://www.recreation.gov/api/"
@@ -45,7 +45,7 @@ class rec_api(object):
 
     def get_site_availability(self, id, start_date):
         """
-        Search for campgrounds
+        Return a month of availabilities from a given start date
         Arguments:
             id (str) - entity_id of campground
             start_date (datetime) - start date from which to search (months)
@@ -62,7 +62,7 @@ class rec_api(object):
 
 
 def main():
-    test_api = rec_api()
+    test_api = rec_client()
     sites = test_api.search_campsites("pinnacles national park")
     print(sites[0].get("name"))
     print(sites[0].get("description"))
