@@ -1,7 +1,9 @@
 import requests, logging, datetime
 
 class rec_client(object):
-    
+
+    TPARSE = "%Y-%m-%dT00:00:00.000Z"
+
     def __init__(self):
         self.API_BASE = "https://www.recreation.gov/api/"
         self.session = requests.Session()
@@ -11,6 +13,7 @@ class rec_client(object):
             'Connection': 'keep-alive',
             'Accept-Encoding': 'gzip, deflate, br',
             'Accept-Language': 'en-US,en;q=0.5',
+            'Accept': 'application/json, text/plain, */*',
             'Cache-Control': 'no-cache, no-store, must-revalidate'
         })
 
@@ -53,10 +56,12 @@ class rec_client(object):
             (list) - monthly availability for each site in campground
         """
         url = "camps/availability/campground/{}/month".format(id)
-        date_string = start_date.strftime("%Y-%m-%dT00:00:00.000Z")
+        #Must be first of any month
+        date_string = start_date.strftime("%Y-%m-01T00:00:00.000Z")
         params = {
             'start_date': date_string
         }
+        #Useful data: site, loop, campsite_reserve_type, max_num_people, availabilities
         return self._get_json(url, params).get("campsites").values()
 
 
@@ -64,12 +69,18 @@ class rec_client(object):
 def main():
     test_api = rec_client()
     sites = test_api.search_campsites("pinnacles national park")
-    print(sites[0].get("name"))
-    print(sites[0].get("description"))
-    print(sites[0].get("addresses"))
-    print(sites[0].get("entity_id"))
-    availability = test_api.get_site_availability(sites[0].get("entity_id"), "2019-03-01T00:00:00.000Z")
-    print(availability[list(availability.keys())[0]])
+    for i in range(5):
+        site = sites[i]
+        print("(%s) " % (str(i+1)) + site.get("name"))
+        print(site.get("description"))
+        print(site.get("addresses"))
+        print("\n")
+    # print(sites[0].get("name"))
+    # print(sites[0].get("description"))
+    # print(sites[0].get("addresses"))
+    # print(sites[0].get("entity_id"))
+    # availability = test_api.get_site_availability(sites[0].get("entity_id"), datetime.date(year=2019, month=4, day=1))
+    # print(availability)
 
 if __name__ == "__main__":
     main()
