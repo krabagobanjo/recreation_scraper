@@ -2,7 +2,7 @@ import requests, logging, datetime
 
 class rec_client(object):
 
-    TPARSE = "%Y-%m-%dT00:00:00.000Z"
+    TPARSE = "%Y-%m-%dT00:00:00Z"
 
     def __init__(self):
         self.API_BASE = "https://www.recreation.gov/api/"
@@ -69,7 +69,7 @@ class rec_client(object):
 def main():
     test_api = rec_client()
     sites = test_api.search_campsites("pinnacles national park")
-    for i in range(5):
+    for i in range(1):
         site = sites[i]
         print("(%s) " % (str(i+1)) + site.get("name"))
         print(site.get("description"))
@@ -79,8 +79,10 @@ def main():
     # print(sites[0].get("description"))
     # print(sites[0].get("addresses"))
     # print(sites[0].get("entity_id"))
-    # availability = test_api.get_site_availability(sites[0].get("entity_id"), datetime.date(year=2019, month=4, day=1))
-    # print(availability)
+    availability = test_api.get_site_availability(sites[0].get("entity_id"), datetime.date(year=2019, month=7, day=20))
+    for item in availability:
+        print(item)
+        break
 
 if __name__ == "__main__":
     main()
