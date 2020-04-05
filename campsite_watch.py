@@ -1,82 +1,146 @@
-import argparse, logging, datetime, base64, os, pickle, smtplib, time, getpass
-from rec_api import rec_client
+import argparse
+import base64
+import datetime
+import getpass
+import logging
+import logging.config
+import os
+import pickle
+import smtplib
+import sys
+import time
 
-sites_currently_available = {}
-num_available = 0
+from collections import namedtuple
+
+from rec_api import RecClient
+
+LOGGING_CONFIG = {
+    'version': 1,
+    'disable_existing_loggers': True,
+    'formatters': {
+        'standard': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+        },
+    },
+    'handlers': {
+        'default': {
+            'level': 'INFO',
+            'formatter': 'standard',
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',
+        },
+    },
+    'loggers': {
+        '': {
+            'handlers': ['default'],
+            'level': 'INFO',
+            'propagate': False
+        }
+    } 
+}
+
+logging.config.dictConfig(LOGGING_CONFIG)
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
 
 def get_available_sites(config):
-    client = rec_client()
+    client = RecClient()
     start_date = config.get("date_tuple")[0]
     end_date = config.get("date_tuple")[1]
     available_sites = {}
-    for site_id in config.get("site_ids"):
+    for site_id in config.get("site_id_name_map").keys():
         availability = client.get_site_availability(site_id, start_date)
         for avail in availability:
             for date_str, avail_str in avail.get("availabilities").items():
                 if avail_str == "Available":
                     date_obj = datetime.datetime.strptime(date_str, client.TPARSE)
-                    if date_obj <= end_date and date_obj >= start_date:
+                    if start_date <= date_obj <= end_date:
+                        site_info = {
+                            "campsite_id": avail.get("campsite_id"),
+                            "site": avail.get("site"),
+                            "loop": avail.get("loop"),
+                            "campsite_type": avail.get("campsite_type")
+                        }
                         if available_sites.get(site_id):
-                            available_sites.get(site_id).append(avail)
+                            available_sites.get(site_id).append(site_info)
                         else:
-                            available_sites[site_id] = [avail]
+                            available_sites[site_id] = [site_info]
     return available_sites
 
-def get_unavailable(sites):
-    global sites_currently_available
-    no_longer_available = {}
-    for site_id, site_list in sites_currently_available:
-        sites_to_compare = sites.get(site_id)
-        for s in site_list:
-            if s not in sites_to_compare:
-                if not no_longer_available.get(site_id):
-                    no_longer_available[site_id] = [s]
-                else:
-                    no_longer_available.get(site_id).append(s)
-    sites_currently_available = sites
-    return no_longer_available
+def alert_on_available(config, curr, prev):
 
-def alert_on_available(config, sites):
-    no_longer_available = get_unavailable(sites)
-    if len(sites) != num_available:
-        num_available = len(sites)
-        email = config["email_tuple"][0]
-        pwd = base64.b64decode(config["email_tuple"][1]).decode()
-        FROM = "krabagobanjo@gmail.com"
-        TO = [config["email_tuple"][0]]
-        SUBJECT = "Open Campsites Found"
-        TEXT = """Hello,
-    We found the following campsites for you:
+    email = config["email_tuple"][0]
+    pwd = base64.b64decode(config["email_tuple"][1]).decode()
+    fromaddr = email
+    toaddr = config["dest_list"]
+    subject = "Rec.gov Open Campsites Found"
 
-    %s
+    url_base = "https://www.recreation.gov/camping/campgrounds/"
 
-    The following sites are no longer available:
+    avail = []
+    navail = []
+    for ground_id, avail_list in curr.items():
+        curr_set = {namedtuple("avail", d.keys())(*d.values()) for d in avail_list}
+        prev_set = {namedtuple("avail", d.keys())(*d.values()) for d in prev.get("ground_id")} if prev.get("ground_id") else set()
+        no_longer_available = prev_set.difference(curr_set)
+        url = url_base + ground_id
+        header_str = "{}\n{}\n\n".format(config.get("site_id_name_map").get(ground_id), url)
+        avail_body = header_str
+        navail_body = header_str
+        if curr_set:
+            for availitem in curr_set:
+                avail_body += "site num: {}\nsite loop: {}\nsite type: {}\n".format(availitem.site, availitem.loop, availitem.campsite_type)
+        else:
+            avail_body += "(None Available)\n"
+        if no_longer_available:
+            for navailitem in no_longer_available:
+                navail_body += "site num: {}\nsite loop: {}\nsite type: {}\n".format(navailitem.site, navailitem.loop, navailitem.campsite_type)
+        else:
+            navail_body += "(None no longer available)\n"
+        avail.append(avail_body)
+        navail.append(navail_body)
 
-    %s
 
-    Please book by using https://www.recreation.gov/camping/campgrounds/[site_id]
+    msg = """Hello,
+We found the following campsites for you:
 
-    Thanks!
-    """ % (str(sites), str(no_longer_available))
+{}
 
-        message = """From: %s\nTo: %s\nSubject: %s\n\n%s
-        """ % (FROM, ", ".join(TO), SUBJECT, TEXT)
-        try:
-            server = smtplib.SMTP("smtp.gmail.com", 587)
-            server.ehlo()
-            server.starttls()
-            server.login(email, pwd)
-            server.sendmail(FROM, TO, message)
-            server.close()
-            print('successfully sent the mail')
-        except:
-            print("failed to send mail")
-        return
+The following sites are no longer available:
+
+{}
+
+Thanks!
+""".format(
+    "\n".join(avail),
+    "\n".join(navail)
+)
+
+    message = """From: %s\nTo: %s\nSubject: %s\n\n%s
+    """ % (fromaddr, toaddr, subject, msg)
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.ehlo()
+        server.starttls()
+        server.login(email, pwd)
+        server.sendmail(fromaddr, toaddr, message)
+        server.close()
+        logging.debug("Email Sent!")
+    except:
+        logging.error("Could not send email", exc_info=True)
+    return
 
 def get_site_input():
-    client = rec_client()
+    client = RecClient()
     outer_prompt = True
-    sites_to_return = []
+    sites_to_return = {}
     while outer_prompt:
         site_name = input("What campsite do you want to book? ")
         site_list = client.search_campsites(site_name)
@@ -101,8 +165,8 @@ def get_site_input():
             else:
                 try:
                     site_choice = int(site_choice)
-                    if site_choice <= 5 or site_choice > 0:
-                        sites_to_return.append(top_hits[site_choice - 1].get("entity_id"))
+                    if 0 < site_choice <= 10:
+                        sites_to_return[top_hits[site_choice - 1].get("entity_id")] = top_hits[site_choice - 1].get("name")
                         reprompt = True
                         while reprompt:
                             another = input("Add more? (y/n) ")
@@ -122,15 +186,14 @@ def get_site_input():
                 except:
                     print("Invalid Input")
                     continue
-    return None
 
 def get_date_input():
     prompt = True
     while prompt:
-        start_str = input("Enter Start Date mm/dd/yyyy: (q to quit)")
+        start_str = input("Enter Start Date mm/dd/yyyy: (q to quit) ")
         if start_str == 'q':
             return
-        end_str = input("Enter End Date mm/dd/yyyy: (q to quit)")
+        end_str = input("Enter End Date mm/dd/yyyy: (q to quit) ")
         if end_str == 'q':
             return
         try:
@@ -147,26 +210,39 @@ def get_email_input():
     pword = base64.b64encode(str.encode(pword))
     return (gmail, pword)
 
+def get_destination():
+    destemail = input("Enter destination emails (comma separated): ")
+    return str(destemail).split(",")
 
 def make_config():
     sites_to_search = get_site_input()
     if not sites_to_search:
+        print("No sites to search. Exiting...")
         return
     dates = get_date_input()
     if not dates:
+        print("No dates to search. Exiting...")
+    destemail = get_destination()
+    if not destemail:
+        print("No destination emails. Exiting...")
         return
     creds = get_email_input()
     data = {
-        "site_ids": sites_to_search,
+        "site_id_name_map": sites_to_search,
         "date_tuple": dates,
-        "email_tuple": creds
+        "email_tuple": creds,
+        "dest_list": destemail
     }
     with open("config.bin", "wb") as writefile:
         pickle.dump(data, writefile)
 
 def make_arg_parser():
     parser = argparse.ArgumentParser(description="Watch for recreation.gov campsites")
-    parser.add_argument("-c", "--config", help="Path to configuration file (run this as a background task)")
+    parser.add_argument(
+        "-c",
+        "--config",
+        help="Path to configuration file (run this as a background task)"
+    )
     return parser
 
 def main():
@@ -176,10 +252,16 @@ def main():
         if os.path.isfile(args.config):
             with open(args.config, 'rb') as readfile:
                 data = pickle.load(readfile)
+            curr = {}
             while True:
-                sites = get_available_sites(data)
-                if len(sites) > 0:
-                    alert_on_available(data, sites)
+                logging.info("Getting sites...")
+                prev = curr
+                curr = get_available_sites(data)
+                for ground_id, avail_list in curr.items():
+                    if prev.get(ground_id) != avail_list:
+                        logging.info("Found open sites! Alerting...")
+                        alert_on_available(data, curr, prev)
+                        break
                 time.sleep(60*1) #Run every minute
     else:
         make_config()
