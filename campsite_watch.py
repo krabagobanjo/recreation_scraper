@@ -14,6 +14,7 @@ from collections import namedtuple
 
 from rec_api import RecClient
 
+# This config just sends to stdout
 LOGGING_CONFIG = {
     'version': 1,
     'disable_existing_loggers': True,
@@ -41,6 +42,7 @@ LOGGING_CONFIG = {
 
 logging.config.dictConfig(LOGGING_CONFIG)
 
+# This ensures an unhandled exception is logged
 def handle_exception(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
@@ -61,17 +63,17 @@ def get_available_sites(config):
             for date_str, avail_str in avail.get("availabilities").items():
                 if avail_str == "Available":
                     date_obj = datetime.datetime.strptime(date_str, client.TPARSE)
-                    if start_date <= date_obj <= end_date:
+                    if start_date <= date_obj < end_date:
                         site_info = {
                             "campsite_id": avail.get("campsite_id"),
                             "site": avail.get("site"),
                             "loop": avail.get("loop"),
                             "campsite_type": avail.get("campsite_type")
                         }
-                        if available_sites.get(site_id):
-                            available_sites.get(site_id).append(site_info)
+                        if available_sites.get(site_id).get(date_obj):
+                            available_sites.get(site_id).get(date_obj).append(site_info)
                         else:
-                            available_sites[site_id] = [site_info]
+                            available_sites[site_id][date_obj] = [site_info]
     return available_sites
 
 def alert_on_available(config, curr, prev):

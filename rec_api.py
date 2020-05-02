@@ -7,7 +7,7 @@ class RecClient:
     TPARSE = "%Y-%m-%dT00:00:00Z"
 
     def __init__(self):
-        self.API_BASE = "https://www.recreation.gov/api/"
+        self.api_base = "https://www.recreation.gov/api/"
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:65.0) Gecko/20100101 Firefox/65.0',
@@ -21,7 +21,7 @@ class RecClient:
 
     def _get_json(self, endpoint, params):
         try:
-            req = self.session.get(self.API_BASE + endpoint, params=params)
+            req = self.session.get(self.api_base + endpoint, params=params)
             req.raise_for_status()
             return req.json()
         except requests.exceptions.HTTPError as hterror:
@@ -67,6 +67,7 @@ class RecClient:
 
 
 def main():
+    # Examples
     test_api = RecClient()
     sites = test_api.search_campsites("pinnacles national park")
     for i in range(1):
