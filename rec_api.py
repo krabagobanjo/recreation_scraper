@@ -1,5 +1,6 @@
 import datetime
 import logging
+from typing import List
 import requests
 
 class RecClient:
@@ -19,7 +20,7 @@ class RecClient:
             'Cache-Control': 'no-cache, no-store, must-revalidate'
         })
 
-    def _get_json(self, endpoint, params):
+    def _get_json(self, endpoint: str, params: dict):
         try:
             req = self.session.get(self.api_base + endpoint, params=params)
             req.raise_for_status()
@@ -27,7 +28,7 @@ class RecClient:
         except requests.exceptions.HTTPError as hterror:
             logging.error(hterror, exc_info=True)
 
-    def search_campsites(self, name):
+    def search_campsites(self, name: str) -> List[dict]:
         """
         Search for campgrounds
         Arguments:
@@ -46,7 +47,7 @@ class RecClient:
         }
         return self._get_json(endpoint, params).get("results")
 
-    def get_site_availability(self, siteid, start_date):
+    def get_site_availability(self, siteid: str, start_date: datetime) -> List[dict]:
         """
         Return a month of availabilities from a given start date
         Arguments:

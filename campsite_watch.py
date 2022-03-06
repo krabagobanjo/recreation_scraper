@@ -10,10 +10,9 @@ import smtplib
 import sys
 import time
 
-from collections import namedtuple
-
 from rec_api import RecClient
 
+# TODO - log to an actual log file
 # This config just sends to stdout
 LOGGING_CONFIG = {
     'version': 1,
@@ -52,7 +51,27 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = handle_exception
 
-def get_available_sites(config):
+class SiteInfo:
+    def __init__(self):
+        self.campsite_id = None
+        self.site = None
+        self.loop = None
+        self.campsite_type = None
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, SiteInfo):
+            return self.campsite_id == other.campsite_id
+        return False
+
+def get_available_sites(config: dict) -> dict:
+    # available_sites_schema = {
+    #     "ground_id" : {
+    #         "date_available" : [
+    #                 SiteInfo()
+    #         ]
+    #     }
+    # }
+
     client = RecClient()
     start_date = config.get("date_tuple")[0]
     end_date = config.get("date_tuple")[1]
@@ -64,20 +83,18 @@ def get_available_sites(config):
                 if avail_str == "Available":
                     date_obj = datetime.datetime.strptime(date_str, client.TPARSE)
                     if start_date <= date_obj < end_date:
-                        site_info = {
-                            "campsite_id": avail.get("campsite_id"),
-                            "site": avail.get("site"),
-                            "loop": avail.get("loop"),
-                            "campsite_type": avail.get("campsite_type")
-                        }
-                        if available_sites.get(site_id).get(date_obj):
-                            available_sites.get(site_id).get(date_obj).append(site_info)
+                        site_info = SiteInfo()
+                        site_info.campsite_id = avail.get("campsite_id")
+                        site_info.site = avail.get("site")
+                        site_info.loop = avail.get("loop")
+                        site_info.campsite_type = avail.get("campsite_type")
+                        if available_sites.get(site_id):
+                            available_sites.get(site_id).append(site_info)
                         else:
-                            available_sites[site_id][date_obj] = [site_info]
+                            available_sites[site_id] = [site_info]
     return available_sites
 
-def alert_on_available(config, curr, prev):
-
+def alert_on_available(config: dict, curr: dict, prev: dict):
     email = config["email_tuple"][0]
     pwd = base64.b64decode(config["email_tuple"][1]).decode()
     fromaddr = email
@@ -89,8 +106,8 @@ def alert_on_available(config, curr, prev):
     avail = []
     navail = []
     for ground_id, avail_list in curr.items():
-        curr_set = {namedtuple("avail", d.keys())(*d.values()) for d in avail_list}
-        prev_set = {namedtuple("avail", d.keys())(*d.values()) for d in prev.get("ground_id")} if prev.get("ground_id") else set()
+        curr_set = {site_info for site_info in avail_list}
+        prev_set = {site_info for site_info in prev.get("ground_id")} if prev.get("ground_id") else set()
         no_longer_available = prev_set.difference(curr_set)
         url = url_base + ground_id
         header_str = "{}\n{}\n\n".format(config.get("site_id_name_map").get(ground_id), url)
@@ -207,6 +224,7 @@ def get_date_input():
     return (start_date, end_date)
 
 def get_email_input():
+    # TODO - store more securely
     gmail = input("Enter gmail address: ")
     pword = getpass.getpass("Enter gmail password: ")
     pword = base64.b64encode(str.encode(pword))
@@ -217,6 +235,7 @@ def get_destination():
     return str(destemail).split(",")
 
 def make_config():
+    # TODO - store email creds separately
     sites_to_search = get_site_input()
     if not sites_to_search:
         print("No sites to search. Exiting...")
