@@ -1,5 +1,4 @@
 import argparse
-import base64
 import datetime
 import getpass
 import logging
@@ -9,6 +8,7 @@ import pickle
 import smtplib
 import sys
 import time
+import keyring
 
 from rec_api import RecClient
 
@@ -36,7 +36,7 @@ LOGGING_CONFIG = {
             'level': 'INFO',
             'propagate': False
         }
-    } 
+    }
 }
 
 logging.config.dictConfig(LOGGING_CONFIG)
@@ -95,8 +95,8 @@ def get_available_sites(config: dict) -> dict:
     return available_sites
 
 def alert_on_available(config: dict, curr: dict, prev: dict):
-    email = config["email_tuple"][0]
-    pwd = base64.b64decode(config["email_tuple"][1]).decode()
+    email = config["send_email"]
+    pwd = keyring.get_password("gmail", email)
     fromaddr = email
     toaddr = config["dest_list"]
     subject = "Rec.gov Open Campsites Found"
@@ -106,8 +106,8 @@ def alert_on_available(config: dict, curr: dict, prev: dict):
     avail = []
     navail = []
     for ground_id, avail_list in curr.items():
-        curr_set = {site_info for site_info in avail_list}
-        prev_set = {site_info for site_info in prev.get("ground_id")} if prev.get("ground_id") else set()
+        curr_set = set(avail_list)
+        prev_set = set(prev.get("ground_id", []))
         no_longer_available = prev_set.difference(curr_set)
         url = url_base + ground_id
         header_str = "{}\n{}\n\n".format(config.get("site_id_name_map").get(ground_id), url)
@@ -221,14 +221,17 @@ def get_date_input():
             prompt = False
         except:
             print("Invalid Input")
-    return (start_date, end_date)
+    return (start_date.strftime("%m/%d/%Y"), end_date.strftime("%m/%d/%Y"))
 
 def get_email_input():
-    # TODO - store more securely
-    gmail = input("Enter gmail address: ")
+    gmail = input("Enter gmail address (for sending alerts): ")
+    stored_credential = keyring.get_password("gmail", gmail)
+    if stored_credential:
+        print("Credentials already saved")
+        return gmail
     pword = getpass.getpass("Enter gmail password: ")
-    pword = base64.b64encode(str.encode(pword))
-    return (gmail, pword)
+    keyring.set_password("gmail", gmail, pword)
+    return gmail
 
 def get_destination():
     destemail = input("Enter destination emails (comma separated): ")
@@ -247,11 +250,11 @@ def make_config():
     if not destemail:
         print("No destination emails. Exiting...")
         return
-    creds = get_email_input()
+    send_email = get_email_input()
     data = {
         "site_id_name_map": sites_to_search,
-        "date_tuple": dates,
-        "email_tuple": creds,
+        "dates": dates,
+        "send_email": send_email,
         "dest_list": destemail
     }
     with open("config.bin", "wb") as writefile:
@@ -263,6 +266,17 @@ def make_arg_parser():
         "-c",
         "--config",
         help="Path to configuration file (run this as a background task)"
+    )
+    parser.add_argument(
+        "-s",
+        "--set-password",
+        action="store_true",
+        help="Set credentials for gmail account"
+    )
+    parser.add_argument(
+        "-d",
+        "--delete-password",
+        help="Delete password for gmail account (requires the correct gmail account)"
     )
     return parser
 
@@ -284,6 +298,12 @@ def main():
                         alert_on_available(data, curr, prev)
                         break
                 time.sleep(60*1) #Run every minute
+    elif args.set_password:
+        get_email_input()
+    elif args.delete_password:
+        stored_credential = keyring.get_password("gmail", args.delete_password)
+        if stored_credential:
+            keyring.delete_password("gmail", args.delete_password)
     else:
         make_config()
 
