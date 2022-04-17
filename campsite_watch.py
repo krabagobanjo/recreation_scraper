@@ -1,14 +1,16 @@
 import argparse
 import datetime
 import getpass
+import json
 import logging
 import logging.config
 import os
-import pickle
 import smtplib
 import sys
 import time
 import keyring
+
+from keyrings.cryptfile.cryptfile import CryptFileKeyring
 
 from rec_api import RecClient
 
@@ -63,6 +65,12 @@ class SiteInfo:
             return self.campsite_id == other.campsite_id
         return False
 
+    def __key(self):
+        return tuple(self.campsite_id)
+
+    def __hash__(self):
+        return hash(self.__key())
+
 def get_available_sites(config: dict) -> dict:
     # available_sites_schema = {
     #     "ground_id" : {
@@ -73,8 +81,10 @@ def get_available_sites(config: dict) -> dict:
     # }
 
     client = RecClient()
-    start_date = config.get("date_tuple")[0]
-    end_date = config.get("date_tuple")[1]
+    start_date_str = config.get("dates")[0]
+    end_date_str = config.get("dates")[1]
+    start_date = datetime.datetime.strptime(start_date_str, "%m/%d/%Y")
+    end_date = datetime.datetime.strptime(end_date_str, "%m/%d/%Y")
     available_sites = {}
     for site_id in config.get("site_id_name_map").keys():
         availability = client.get_site_availability(site_id, start_date)
@@ -257,8 +267,8 @@ def make_config():
         "send_email": send_email,
         "dest_list": destemail
     }
-    with open("config.bin", "wb") as writefile:
-        pickle.dump(data, writefile)
+    with open("config.json", "w", encoding="utf-8") as writefile:
+        json.dump(data, writefile)
 
 def make_arg_parser():
     parser = argparse.ArgumentParser(description="Watch for recreation.gov campsites")
@@ -278,6 +288,11 @@ def make_arg_parser():
         "--delete-password",
         help="Delete password for gmail account (requires the correct gmail account)"
     )
+    parser.add_argument(
+        "-k",
+        "--keyring-password",
+        help="Supply a keyring password (for systems using cryptfile backend)"
+    )
     return parser
 
 def main():
@@ -285,8 +300,12 @@ def main():
     args = parser.parse_args()
     if args.config:
         if os.path.isfile(args.config):
-            with open(args.config, 'rb') as readfile:
-                data = pickle.load(readfile)
+            with open(args.config, 'r', encoding="utf-8") as readfile:
+                data = json.load(readfile)
+            # keyring.get_password("gmail", data.get("send_email")) # Unlock keyring
+            ring = CryptFileKeyring()
+            ring.keyring_key = args.keyring_password if args.keyring_password else sys.exit()
+            keyring.set_keyring(ring)
             curr = {}
             while True:
                 logging.info("Getting sites...")

@@ -11,7 +11,7 @@ class RecClient:
         self.api_base = "https://www.recreation.gov/api/"
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:65.0) Gecko/20100101 Firefox/65.0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:99.0) Gecko/20100101 Firefox/99.0',
             'Host': 'www.recreation.gov',
             'Connection': 'keep-alive',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -42,7 +42,7 @@ class RecClient:
             'entity_type': 'recarea',
             'exact': False,
             'size': 20,
-            'fq': ["-entity_type:tour", "campsite_type_of_use:Overnight", "campsite_type_of_use:na", "entity_type:campground"],
+            'fq': "-entity_type:(tour OR timedentry_tour)",
             'start': 0
         }
         return self._get_json(endpoint, params).get("results")
@@ -56,7 +56,7 @@ class RecClient:
         Returns:
             (list) - monthly availability for each site in campground
         """
-        url = "camps/availability/campground/{}/month".format(siteid)
+        url = f"camps/availability/campground/{siteid}/month"
         #Must be first of any month
         date_string = start_date.strftime("%Y-%m-01T00:00:00.000Z")
         params = {
@@ -64,6 +64,25 @@ class RecClient:
         }
         #Useful data: site, loop, campsite_reserve_type, max_num_people, availabilities
         return self._get_json(url, params).get("campsites").values()
+
+    def get_timed_entry_tickets(self, facility_id: str) -> List[dict]:
+        url = f"api/timedentrycontent/facility/{facility_id}/"
+        params = {
+            "includeFieldSalesOnly": False,
+            "filterCommTours": True
+        }
+        return self._get_json(url, params)
+
+    def get_timed_entry_availability_summary(self, facility_id: str, tour_id: str,
+            start_date: datetime.datetime) -> List[dict]:
+        url = f"api/timedentry/availability/facility/{facility_id}"
+        params = {
+            "year": start_date.year,
+            "month": start_date.month,
+            "inventoryBucket": "FIT",
+            "tourID": tour_id
+        }
+        return self._get_json(url, params)
 
 
 
