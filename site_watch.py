@@ -55,18 +55,18 @@ sys.excepthook = handle_exception
 
 class SiteInfo:
     def __init__(self):
-        self.campsite_id = None
+        self.site_id = None
         self.site = None
         self.loop = None
-        self.campsite_type = None
+        self.site_type = None
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, SiteInfo):
-            return self.campsite_id == other.campsite_id
+            return self.site_id == other.site_id
         return False
 
     def __key(self):
-        return tuple(self.campsite_id)
+        return tuple(self.site_id)
 
     def __hash__(self):
         return hash(self.__key())
@@ -94,10 +94,10 @@ def get_available_sites(config: dict) -> dict:
                     date_obj = datetime.datetime.strptime(date_str, client.TPARSE)
                     if start_date <= date_obj < end_date:
                         site_info = SiteInfo()
-                        site_info.campsite_id = avail.get("campsite_id")
+                        site_info.site_id = avail.get("site_id")
                         site_info.site = avail.get("site")
                         site_info.loop = avail.get("loop")
-                        site_info.campsite_type = avail.get("campsite_type")
+                        site_info.site_type = avail.get("site_type")
                         if available_sites.get(site_id):
                             available_sites.get(site_id).append(site_info)
                         else:
@@ -109,7 +109,7 @@ def alert_on_available(config: dict, curr: dict, prev: dict):
     pwd = keyring.get_password("gmail", email)
     fromaddr = email
     toaddr = config["dest_list"]
-    subject = "Rec.gov Open Campsites Found"
+    subject = "Rec.gov Open sites Found"
 
     url_base = "https://www.recreation.gov/camping/campgrounds/"
 
@@ -120,17 +120,17 @@ def alert_on_available(config: dict, curr: dict, prev: dict):
         prev_set = set(prev.get("ground_id", []))
         no_longer_available = prev_set.difference(curr_set)
         url = url_base + ground_id
-        header_str = "{}\n{}\n\n".format(config.get("site_id_name_map").get(ground_id), url)
+        header_str = f"{config.get('site_id_name_map').get(ground_id)}\n{url}\n\n"
         avail_body = header_str
         navail_body = header_str
         if curr_set:
             for availitem in curr_set:
-                avail_body += "site num: {}\nsite loop: {}\nsite type: {}\n".format(availitem.site, availitem.loop, availitem.campsite_type)
+                avail_body += f"site num: {availitem.site}\nsite loop: {availitem.loop}\nsite type: {availitem.site_type}\n"
         else:
             avail_body += "(None Available)\n"
         if no_longer_available:
             for navailitem in no_longer_available:
-                navail_body += "site num: {}\nsite loop: {}\nsite type: {}\n".format(navailitem.site, navailitem.loop, navailitem.campsite_type)
+                navail_body += f"site num: {navailitem.site}\nsite loop: {navailitem.loop}\nsite type: {navailitem.site_type}\n"
         else:
             navail_body += "(None no longer available)\n"
         avail.append(avail_body)
@@ -138,7 +138,7 @@ def alert_on_available(config: dict, curr: dict, prev: dict):
 
 
     msg = """Hello,
-We found the following campsites for you:
+We found the following sites for you:
 
 {}
 
@@ -152,8 +152,7 @@ Thanks!
     "\n".join(navail)
 )
 
-    message = """From: %s\nTo: %s\nSubject: %s\n\n%s
-    """ % (fromaddr, toaddr, subject, msg)
+    message = f"From: {fromaddr}\nTo: {toaddr}\nSubject: {subject}\n\n{msg}"
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.ehlo()
@@ -162,24 +161,23 @@ Thanks!
         server.sendmail(fromaddr, toaddr, message)
         server.close()
         logging.debug("Email Sent!")
-    except:
+    except: #pylint:disable=bare-except
         logging.error("Could not send email", exc_info=True)
-    return
 
 def get_site_input():
     client = RecClient()
     outer_prompt = True
     sites_to_return = {}
     while outer_prompt:
-        site_name = input("What campsite do you want to book? ")
-        site_list = client.search_campsites(site_name)
+        site_name = input("What site do you want to book? ")
+        site_list = client.search_sites(site_name)
         if not site_list:
             print("No results found :-(")
             continue
         top_hits = site_list[0:10]
         for i in range(10):
             site = top_hits[i]
-            print("(%s) " % (str(i+1)) + site.get("name"))
+            print(f"{str(i+1)}{site.get('name')}")
             print(site.get("description"))
             print(site.get("addresses"))
             print("\n")
@@ -195,7 +193,8 @@ def get_site_input():
                 try:
                     site_choice = int(site_choice)
                     if 0 < site_choice <= 10:
-                        sites_to_return[top_hits[site_choice - 1].get("entity_id")] = top_hits[site_choice - 1].get("name")
+                        sites_to_return[top_hits[site_choice - 1].get("entity_id")] = \
+                            top_hits[site_choice - 1].get("name")
                         reprompt = True
                         while reprompt:
                             another = input("Add more? (y/n) ")
@@ -212,7 +211,7 @@ def get_site_input():
                     else:
                         print("Invalid Input")
                         continue
-                except:
+                except: #pylint:disable=bare-except
                     print("Invalid Input")
                     continue
 
@@ -229,7 +228,7 @@ def get_date_input():
             start_date = datetime.datetime.strptime(start_str, "%m/%d/%Y")
             end_date = datetime.datetime.strptime(end_str, "%m/%d/%Y")
             prompt = False
-        except:
+        except: #pylint:disable=bare-except
             print("Invalid Input")
     return (start_date.strftime("%m/%d/%Y"), end_date.strftime("%m/%d/%Y"))
 
@@ -248,7 +247,6 @@ def get_destination():
     return str(destemail).split(",")
 
 def make_config():
-    # TODO - store email creds separately
     sites_to_search = get_site_input()
     if not sites_to_search:
         print("No sites to search. Exiting...")
@@ -271,7 +269,7 @@ def make_config():
         json.dump(data, writefile)
 
 def make_arg_parser():
-    parser = argparse.ArgumentParser(description="Watch for recreation.gov campsites")
+    parser = argparse.ArgumentParser(description="Watch for recreation.gov sites")
     parser.add_argument(
         "-c",
         "--config",
@@ -298,14 +296,15 @@ def make_arg_parser():
 def main():
     parser = make_arg_parser()
     args = parser.parse_args()
+    if args.keyring_password:
+        ring = CryptFileKeyring()
+        ring.keyring_key = args.keyring_password
+        keyring.set_keyring(ring)
     if args.config:
         if os.path.isfile(args.config):
             with open(args.config, 'r', encoding="utf-8") as readfile:
                 data = json.load(readfile)
             # keyring.get_password("gmail", data.get("send_email")) # Unlock keyring
-            ring = CryptFileKeyring()
-            ring.keyring_key = args.keyring_password if args.keyring_password else sys.exit()
-            keyring.set_keyring(ring)
             curr = {}
             while True:
                 logging.info("Getting sites...")

@@ -28,13 +28,13 @@ class RecClient:
         except requests.exceptions.HTTPError as hterror:
             logging.error(hterror, exc_info=True)
 
-    def search_campsites(self, name: str) -> List[dict]:
+    def search_sites(self, name: str) -> List[dict]:
         """
-        Search for campgrounds
+        Search for sites
         Arguments:
-            name (str) - name of campground
+            name (str) - name of site
         Returns:
-            (list) - campground results
+            (list) - site results
         """
         endpoint = "search"
         params = {
@@ -89,10 +89,10 @@ class RecClient:
 def main():
     # Examples
     test_api = RecClient()
-    sites = test_api.search_campsites("pinnacles national park")
+    sites = test_api.search_sites("pinnacles national park")
     for i in range(1):
         site = sites[i]
-        print("(%s) " % (str(i+1)) + site.get("name"))
+        print(f"{str(i+1)}{site.get('name')}")
         print(site.get("description"))
         print(site.get("addresses"))
         print("\n")
