@@ -6,6 +6,7 @@ import requests
 class RecClient:
 
     TPARSE = "%Y-%m-%dT00:00:00Z"
+    AVAILABLE_ENTITIES = ["campground", "timedentry", "permit"]
 
     def __init__(self):
         self.api_base = "https://www.recreation.gov/api/"
@@ -43,20 +44,23 @@ class RecClient:
             'exact': False,
             'size': 20,
             'fq': "-entity_type:(tour OR timedentry_tour)",
-            'start': 0
+            'start': 0 # TODO - add pagination support
         }
-        return self._get_json(endpoint, params).get("results")
 
-    def get_site_availability(self, siteid: str, start_date: datetime) -> List[dict]:
+        results = self._get_json(endpoint, params).get("results")
+        ret = [res for res in results if res.get("entity_type", "") in self.AVAILABLE_ENTITIES]
+        return ret
+
+    def get_site_availability(self, entity_id: str, start_date: datetime) -> List[dict]:
         """
         Return a month of availabilities from a given start date
         Arguments:
-            siteid (str) - entity_id of campground
+            entity_id (str) - entity_id of campground
             start_date (datetime) - start date from which to search (months)
         Returns:
             (list) - monthly availability for each site in campground
         """
-        url = f"camps/availability/campground/{siteid}/month"
+        url = f"camps/availability/campground/{entity_id}/month"
         #Must be first of any month
         date_string = start_date.strftime("%Y-%m-01T00:00:00.000Z")
         params = {
@@ -65,17 +69,17 @@ class RecClient:
         #Useful data: site, loop, campsite_reserve_type, max_num_people, availabilities
         return self._get_json(url, params).get("campsites").values()
 
-    def get_timed_entry_tickets(self, facility_id: str) -> List[dict]:
-        url = f"api/timedentrycontent/facility/{facility_id}/"
+    def get_timed_entry_tickets(self, entity_id: str) -> List[dict]:
+        url = f"api/timedentrycontent/facility/{entity_id}/"
         params = {
             "includeFieldSalesOnly": False,
             "filterCommTours": True
         }
         return self._get_json(url, params)
 
-    def get_timed_entry_availability_summary(self, facility_id: str, tour_id: str,
+    def get_timed_entry_availability_summary(self, entity_id: str, tour_id: str,
             start_date: datetime.datetime) -> List[dict]:
-        url = f"api/timedentry/availability/facility/{facility_id}"
+        url = f"api/timedentry/availability/facility/{entity_id}"
         params = {
             "year": start_date.year,
             "month": start_date.month,

@@ -202,12 +202,11 @@ def get_site_input():
                             if another == 'y':
                                 inner_prompt = False
                                 break
-                            elif another == 'n':
+                            if another == 'n':
                                 outer_prompt = False
                                 inner_prompt = False
                                 return sites_to_return
-                            else:
-                                print("Invalid option")
+                            print("Invalid option")
                     else:
                         print("Invalid Input")
                         continue
