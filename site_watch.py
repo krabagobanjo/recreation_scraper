@@ -94,10 +94,10 @@ def get_available_sites(config: dict) -> dict:
                     date_obj = datetime.datetime.strptime(date_str, client.TPARSE)
                     if start_date <= date_obj < end_date:
                         site_info = SiteInfo()
-                        site_info.site_id = avail.get("site_id")
+                        site_info.site_id = avail.get("campsite_id")
                         site_info.site = avail.get("site")
                         site_info.loop = avail.get("loop")
-                        site_info.site_type = avail.get("site_type")
+                        site_info.site_type = avail.get("type_of_use")
                         if available_sites.get(site_id):
                             available_sites.get(site_id).append(site_info)
                         else:
@@ -169,7 +169,7 @@ def get_site_input():
     outer_prompt = True
     sites_to_return = {}
     while outer_prompt:
-        site_name = input("What site do you want to book? ")
+        site_name = input("What site do you want to book? (search for a site) ")
         site_list = client.search_sites(site_name)
         if not site_list:
             print("No results found :-(")
@@ -177,7 +177,7 @@ def get_site_input():
         top_hits = site_list[0:10]
         for i in range(10):
             site = top_hits[i]
-            print(f"{str(i+1)}{site.get('name')}")
+            print(f"{str(i+1)} {site.get('name')}")
             print(site.get("description"))
             print(site.get("addresses"))
             print("\n")
